@@ -114,17 +114,17 @@ class ApiCall:
         columns = self.get_columns()
 
         if isinstance(columns, Exception):
-            return [{"message": "No columns found in the response."}]
+            return columns
 
         soup = self.soupify()
 
         if isinstance(soup, Exception):
-            return [{"message": "No rows found in the response."}]
+            return soup
 
         rowlist = soup.find_all('row')
 
         if not rowlist:
-            return [{"message": "No rows found in the response."}]
+            return Exception('No rows found in the response.')
 
         rows = []
 
