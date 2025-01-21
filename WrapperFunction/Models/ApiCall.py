@@ -4,7 +4,6 @@ ApiCall.py
 import os
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
-from bs4 import BeautifulSoup
 import requests
 import urllib.parse
 
@@ -54,85 +53,26 @@ class ApiCall:
 
         return apikey
 
-    def execute(self) -> str or Exception:
+    def execute(self) -> requests.Response or JSONResponse:
         """
         Execute the API call.
-        :return: The API response.
+        :return: The response from the API call.
         """
         payload = {'limit': '1000', 'col_names': 'true', 'path': self.report_path, 'apikey': self.get_apikey()}
         payload_str = urllib.parse.urlencode(payload, safe=':%')
 
         try:  # Try to get the report from Alma
             response = requests.get(self.build_path(), params=payload_str)  # Get the report from Alma
-            response.raise_for_status()  # Check for errors
-        except requests.exceptions.RequestException as e:
-            return e
+        except Exception as e:  # Handle exceptions
+            return JSONResponse(
+                status_code=500,
+                content={'status': 'error', 'message': f'An error occurred: {e}'},
+            )
 
-        return response.content
+        if response.status_code != 200:  # Check for HTTP errors
+            return JSONResponse(
+                status_code=response.status_code,
+                content={'status': 'error', 'message': f'An error occurred: {response.text}'},
+            )
 
-    def soupify(self) -> str or Exception:
-        """
-        Execute the API call.
-        :return: The API response.
-        """
-        response = self.execute()
-
-        if isinstance(response, Exception):
-            return response
-
-        soup = BeautifulSoup(response, 'xml')
-
-        return soup
-
-    def get_columns(self) -> dict[str, str] or Exception:
-        """
-        Get the headings of all columns.
-        :return: A dictionary of column headings.
-        """
-        soup = self.soupify()
-
-        if isinstance(soup, Exception):
-            return soup
-
-        columnlist = soup.find_all('xsd:element')  # Get the columns from the XML response
-
-        if not columnlist:
-            return Exception('No columns found in the response.')
-
-        columns = {}
-        for column in columnlist:
-            columns[column['name']] = column['type']
-
-        return columns
-
-    def get_rows(self) -> list[dict[str, str]] or Exception:
-        """
-        Get the values of all rows.
-        :return: List of dictionaries of row values.
-        """
-
-        columns = self.get_columns()
-
-        if isinstance(columns, Exception):
-            return columns
-
-        soup = self.soupify()
-
-        if isinstance(soup, Exception):
-            return soup
-
-        rowlist = soup.find_all('row')
-
-        if not rowlist:
-            return Exception('No rows found in the response.')
-
-        rows = []
-
-        for row in rowlist:
-            rowdict = {}
-            for value in row:
-                heading = columns[value['name']]
-                rowdict[heading] = value.text
-            rows.append(rowdict)
-
-        return rows
+        return response
